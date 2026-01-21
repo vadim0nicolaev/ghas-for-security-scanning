@@ -1,0 +1,1 @@
+# ghas-for-security-scanning
