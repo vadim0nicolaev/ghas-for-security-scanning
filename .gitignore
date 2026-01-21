@@ -1,6 +1,5 @@
 # Dependencies
 node_modules/
-package-lock.json
 
 # Build outputs
 dist/
@@ -39,3 +38,5 @@ trivy-*.json
 # Temporary files
 tmp/
 temp/
+
+prompt.md
