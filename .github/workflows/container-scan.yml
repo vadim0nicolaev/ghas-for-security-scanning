@@ -1,0 +1,112 @@
+# Container Image Scanning
+# This workflow builds the Docker image and scans it for vulnerabilities using Trivy
+# Results are uploaded to GitHub Security tab via SARIF format
+
+name: "Container Security Scan"
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'Dockerfile'
+      - 'package*.json'
+      - 'src/**'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'Dockerfile'
+      - 'package*.json'
+      - 'src/**'
+  schedule:
+    # Run weekly on Mondays at 01:00 UTC
+    - cron: '0 1 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+
+jobs:
+  build-and-scan:
+    name: Build and Scan Container
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: false
+          load: true
+          tags: ghas-demo:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # Scan image for vulnerabilities using Trivy
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'ghas-demo:${{ github.sha }}'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'CRITICAL,HIGH,MEDIUM'
+          vuln-type: 'os,library'
+
+      # Upload SARIF results to GitHub Security tab
+      - name: Upload Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'
+          category: 'container-scanning'
+
+      # Also generate a human-readable table report
+      - name: Run Trivy scanner (table format)
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'ghas-demo:${{ github.sha }}'
+          format: 'table'
+          severity: 'CRITICAL,HIGH,MEDIUM'
+          vuln-type: 'os,library'
+
+      # Upload Trivy results as artifact
+      - name: Upload scan results artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: trivy-scan-results
+          path: trivy-results.sarif
+          retention-days: 30
+
+  # Separate job for scanning the Dockerfile itself (IaC scanning)
+  dockerfile-scan:
+    name: Dockerfile Security Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Scan Dockerfile for misconfigurations
+      - name: Run Trivy config scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'config'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-config-results.sarif'
+          severity: 'CRITICAL,HIGH,MEDIUM'
+
+      - name: Upload Trivy config results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-config-results.sarif'
+          category: 'dockerfile-scanning'

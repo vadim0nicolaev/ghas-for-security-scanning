@@ -1,0 +1,105 @@
+# SBOM Generation and Submission
+# This workflow generates Software Bill of Materials (SBOM) in SPDX format
+# and submits it to GitHub's Dependency Graph via the Dependency Submission API
+
+name: "SBOM Generation"
+
+on:
+  push:
+    branches: [main]
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  sbom-generation:
+    name: Generate SBOM
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      # Generate SBOM using Anchore's SBOM action (supports SPDX and CycloneDX)
+      - name: Generate SBOM (SPDX format)
+        uses: anchore/sbom-action@v0
+        with:
+          path: .
+          format: spdx-json
+          output-file: sbom-spdx.json
+          artifact-name: sbom-spdx.json
+
+      - name: Generate SBOM (CycloneDX format)
+        uses: anchore/sbom-action@v0
+        with:
+          path: .
+          format: cyclonedx-json
+          output-file: sbom-cyclonedx.json
+          artifact-name: sbom-cyclonedx.json
+
+      # Upload SBOM as workflow artifacts for storage
+      - name: Upload SBOM artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-files
+          path: |
+            sbom-spdx.json
+            sbom-cyclonedx.json
+          retention-days: 90
+
+      # Submit dependencies to GitHub Dependency Graph
+      - name: Submit Dependency Graph
+        uses: anchore/sbom-action@v0
+        with:
+          path: .
+          dependency-snapshot: true
+
+  # Optional: Separate job for container SBOM if image is built
+  container-sbom:
+    name: Container SBOM
+    runs-on: ubuntu-latest
+    needs: sbom-generation
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: false
+          load: true
+          tags: ghas-demo:${{ github.sha }}
+
+      # Generate SBOM for the container image
+      - name: Generate Container SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          image: ghas-demo:${{ github.sha }}
+          format: spdx-json
+          output-file: container-sbom-spdx.json
+          artifact-name: container-sbom-spdx.json
+
+      - name: Upload Container SBOM
+        uses: actions/upload-artifact@v4
+        with:
+          name: container-sbom
+          path: container-sbom-spdx.json
+          retention-days: 90

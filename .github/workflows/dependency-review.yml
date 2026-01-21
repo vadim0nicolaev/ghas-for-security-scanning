@@ -1,0 +1,36 @@
+# Dependency Review - GitHub's native dependency vulnerability detection
+# This workflow scans pull requests for vulnerable dependencies
+# It blocks PRs that introduce new vulnerabilities above specified severity
+
+name: "Dependency Review"
+
+on:
+  pull_request:
+    branches: [main, develop]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  dependency-review:
+    name: Dependency Review
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Dependency Review
+        uses: actions/dependency-review-action@v4
+        with:
+          # Fail on vulnerabilities with severity >= high
+          fail-on-severity: high
+          # Also check for license issues
+          deny-licenses: GPL-3.0, AGPL-3.0
+          # Allow specific licenses
+          allow-licenses: MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, ISC
+          # Comment on PR with vulnerability summary
+          comment-summary-in-pr: always
+          # Warn about vulnerabilities but don't block (set to 'true' to block)
+          warn-only: false

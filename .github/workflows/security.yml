@@ -1,0 +1,143 @@
+# Combined Security Workflow
+# This is a reusable workflow pattern that can be called from other repos
+# It combines multiple security checks into a single workflow
+
+name: "Security Pipeline"
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+  pull-requests: write
+  actions: read
+
+jobs:
+  # Secret scanning is enabled at repo/org level, not via workflow
+  # This job just documents that it should be enabled
+  secrets-check:
+    name: Secrets Scanning Info
+    runs-on: ubuntu-latest
+    steps:
+      - name: Secret Scanning Status
+        run: |
+          echo "=========================================="
+          echo "SECRET SCANNING CONFIGURATION"
+          echo "=========================================="
+          echo ""
+          echo "Secret scanning is configured at the repository/organization level."
+          echo "To enable:"
+          echo "  1. Go to Settings > Code security and analysis"
+          echo "  2. Enable 'Secret scanning'"
+          echo "  3. Enable 'Push protection' to block commits with secrets"
+          echo ""
+          echo "For this demo, secrets in code (like JWT_SECRET in src/index.js)"
+          echo "will be flagged if secret scanning is enabled."
+          echo "=========================================="
+
+  # Run npm audit for quick dependency check
+  npm-audit:
+    name: NPM Audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Run npm audit
+        run: npm audit --audit-level=moderate || true
+        continue-on-error: true
+
+      - name: Run npm audit (JSON output)
+        run: npm audit --json > npm-audit-results.json || true
+        continue-on-error: true
+
+      - name: Upload npm audit results
+        uses: actions/upload-artifact@v4
+        with:
+          name: npm-audit-results
+          path: npm-audit-results.json
+          retention-days: 30
+
+  # License compliance check
+  license-check:
+    name: License Compliance
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Install license-checker
+        run: npm install -g license-checker
+
+      - name: Check licenses
+        run: |
+          license-checker --summary
+          license-checker --json > license-report.json
+
+      - name: Upload license report
+        uses: actions/upload-artifact@v4
+        with:
+          name: license-report
+          path: license-report.json
+          retention-days: 30
+
+  # Summary job that depends on all others
+  security-summary:
+    name: Security Summary
+    runs-on: ubuntu-latest
+    needs: [secrets-check, npm-audit, license-check]
+    if: always()
+    steps:
+      - name: Security Pipeline Summary
+        run: |
+          echo "=========================================="
+          echo "SECURITY PIPELINE SUMMARY"
+          echo "=========================================="
+          echo ""
+          echo "This repository demonstrates GitHub-native security features:"
+          echo ""
+          echo "1. SECRET SCANNING (repo settings)"
+          echo "   - Detects hardcoded secrets in code"
+          echo "   - Push protection blocks commits with secrets"
+          echo ""
+          echo "2. CODEQL (SAST) - see codeql.yml"
+          echo "   - Static analysis for security vulnerabilities"
+          echo "   - SQL injection, XSS, command injection, etc."
+          echo ""
+          echo "3. DEPENDENCY REVIEW - see dependency-review.yml"
+          echo "   - Blocks PRs with vulnerable dependencies"
+          echo "   - License compliance checking"
+          echo ""
+          echo "4. SBOM GENERATION - see sbom.yml"
+          echo "   - SPDX and CycloneDX format support"
+          echo "   - Dependency submission to GitHub"
+          echo ""
+          echo "5. CONTAINER SCANNING - see container-scan.yml"
+          echo "   - Trivy vulnerability scanning"
+          echo "   - SARIF results in Security tab"
+          echo ""
+          echo "View results in the Security tab of this repository."
+          echo "=========================================="

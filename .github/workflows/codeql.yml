@@ -1,0 +1,61 @@
+# CodeQL Analysis - GitHub's native SAST solution
+# This workflow performs static analysis security testing (SAST) using CodeQL
+# Results appear in the Security tab under "Code scanning alerts"
+
+name: "CodeQL Analysis"
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  schedule:
+    # Run weekly on Mondays at 00:00 UTC
+    - cron: '0 0 * * 1'
+  workflow_dispatch:
+
+jobs:
+  analyze:
+    name: Analyze
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+
+    permissions:
+      # Required for all workflows
+      security-events: write
+      # Required to fetch internal or private CodeQL packs
+      packages: read
+      # Only required for workflows in private repositories
+      actions: read
+      contents: read
+
+    strategy:
+      fail-fast: false
+      matrix:
+        language: ['javascript-typescript']
+        # CodeQL supports: 'c-cpp', 'csharp', 'go', 'java-kotlin', 'javascript-typescript', 'python', 'ruby', 'swift'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Initializes the CodeQL tools for scanning
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          # Use extended security queries for more comprehensive analysis
+          queries: security-extended,security-and-quality
+          # If you wish to specify custom queries, you can do so here:
+          # queries: ./path/to/local/query, your-org/your-repo/queries@main
+
+      # Autobuild attempts to build any compiled languages
+      # For JavaScript/TypeScript, this step is usually not needed
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v3
+
+      # Performs CodeQL analysis
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:${{matrix.language}}"
