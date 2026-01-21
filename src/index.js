@@ -11,7 +11,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // INTENTIONAL VULNERABILITY: Hardcoded secret (Secret scanning should catch this pattern)
-const JWT_SECRET = 'super-secret-key-12345';
+const JWT_SECRET = 'super-secret-key-12345-which-should-be-detected-by-secret-scanning';
 
 // Health check endpoint
 app.get('/health', (req, res) => {
