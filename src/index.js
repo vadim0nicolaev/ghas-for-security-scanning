@@ -10,7 +10,20 @@ const PORT = process.env.PORT || 3000;
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// INTENTIONAL VULNERABILITY: Hardcoded secret (Secret scanning should catch this pattern)
+// INTENTIONAL VULNERABILITY: Hardcoded secrets (Secret scanning WILL detect these patterns)
+// WARNING: These are TEST/EXAMPLE credentials - DO NOT USE IN PRODUCTION
+
+// AWS Access Key pattern (will trigger secret scanning)
+const AWS_ACCESS_KEY_ID = 'AKIAIOSFODNN7EXAMPLE';
+const AWS_SECRET_ACCESS_KEY = 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY';
+
+// GitHub Personal Access Token pattern (will trigger secret scanning)
+const GITHUB_TOKEN = 'ghp_aBcDeFgHiJkLmNoPqRsTuVwXyZ0123456789';
+
+// Slack Webhook URL pattern (will trigger secret scanning)
+const SLACK_WEBHOOK = 'https://hooks.slack.com/services/T00000000/B00000000/XXXXXXXXXXXXXXXXXXXXXXXX';
+
+// Generic JWT secret (for application use)
 const JWT_SECRET = 'super-secret-key-12345-which-should-be-detected-by-secret-scanning';
 
 // Health check endpoint
@@ -85,6 +98,145 @@ app.post('/calculate', (req, res) => {
     res.json({ result });
   } catch (error) {
     res.status(400).json({ error: 'Invalid expression' });
+  }
+});
+
+// ============================================================
+// ADDITIONAL VULNERABILITIES FOR CODEQL DEMO
+// ============================================================
+
+// INTENTIONAL VULNERABILITY: NoSQL Injection (MongoDB-style)
+app.get('/products', (req, res) => {
+  const category = req.query.category;
+  // DO NOT USE IN PRODUCTION - NoSQL injection vulnerability
+  // Simulating MongoDB query with user input directly in query object
+  const query = { $where: `this.category == '${category}'` };
+  console.log('MongoDB query:', JSON.stringify(query));
+  res.json({ message: 'Products query', query });
+});
+
+// INTENTIONAL VULNERABILITY: Open Redirect
+app.get('/redirect', (req, res) => {
+  const url = req.query.url;
+  // DO NOT USE IN PRODUCTION - Open redirect vulnerability
+  // Attacker can redirect users to malicious sites
+  res.redirect(url);
+});
+
+// INTENTIONAL VULNERABILITY: Server-Side Request Forgery (SSRF)
+app.get('/fetch', async (req, res) => {
+  const targetUrl = req.query.url;
+  const fetch = require('node-fetch');
+  // DO NOT USE IN PRODUCTION - SSRF vulnerability
+  // Attacker can access internal services
+  try {
+    const response = await fetch(targetUrl);
+    const data = await response.text();
+    res.send(data);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// INTENTIONAL VULNERABILITY: Insecure Deserialization
+app.post('/deserialize', (req, res) => {
+  const serialized = req.body.data;
+  // DO NOT USE IN PRODUCTION - Insecure deserialization
+  // Using Function constructor is similar to eval
+  try {
+    const func = new Function('return ' + serialized);
+    const result = func();
+    res.json({ result });
+  } catch (error) {
+    res.status(400).json({ error: 'Deserialization failed' });
+  }
+});
+
+// INTENTIONAL VULNERABILITY: Regular Expression DoS (ReDoS)
+app.post('/validate-email', (req, res) => {
+  const email = req.body.email;
+  // DO NOT USE IN PRODUCTION - ReDoS vulnerability
+  // This regex is vulnerable to catastrophic backtracking
+  const emailRegex = /^([a-zA-Z0-9_\.\-])+\@(([a-zA-Z0-9\-])+\.)+([a-zA-Z0-9]{2,4})+$/;
+  const isValid = emailRegex.test(email);
+  res.json({ valid: isValid });
+});
+
+// INTENTIONAL VULNERABILITY: Log Injection
+app.post('/log', (req, res) => {
+  const userInput = req.body.message;
+  // DO NOT USE IN PRODUCTION - Log injection vulnerability
+  // Attacker can inject fake log entries or CRLF characters
+  console.log('User action: ' + userInput);
+  res.json({ logged: true });
+});
+
+// INTENTIONAL VULNERABILITY: HTTP Header Injection
+app.get('/set-header', (req, res) => {
+  const headerValue = req.query.value;
+  // DO NOT USE IN PRODUCTION - Header injection vulnerability
+  // Attacker can inject CRLF and add arbitrary headers
+  res.setHeader('X-Custom-Header', headerValue);
+  res.json({ message: 'Header set' });
+});
+
+// INTENTIONAL VULNERABILITY: Prototype Pollution via JSON.parse
+app.post('/config', (req, res) => {
+  const userConfig = req.body;
+  const defaultConfig = { theme: 'light', lang: 'en' };
+  // DO NOT USE IN PRODUCTION - Prototype pollution
+  // Merging user input into object without sanitization
+  for (const key in userConfig) {
+    defaultConfig[key] = userConfig[key];
+  }
+  res.json(defaultConfig);
+});
+
+// INTENTIONAL VULNERABILITY: Timing Attack on Password Comparison
+app.post('/verify-password', (req, res) => {
+  const { password } = req.body;
+  const storedPassword = 'secretPassword123';
+  // DO NOT USE IN PRODUCTION - Timing attack vulnerability
+  // Direct string comparison leaks timing information
+  if (password === storedPassword) {
+    res.json({ valid: true });
+  } else {
+    res.json({ valid: false });
+  }
+});
+
+// INTENTIONAL VULNERABILITY: XML External Entity (XXE) - if xml parser used
+app.post('/parse-xml', (req, res) => {
+  const xmlData = req.body.xml;
+  // DO NOT USE IN PRODUCTION - Potential XXE if parsed unsafely
+  // Simulating unsafe XML handling
+  res.json({ message: 'XML received', length: xmlData?.length });
+});
+
+// INTENTIONAL VULNERABILITY: Hardcoded Database Credentials
+const dbConfig = {
+  host: 'localhost',
+  user: 'admin',
+  password: 'admin123!@#',  // Hardcoded credential
+  database: 'production_db'
+};
+
+// INTENTIONAL VULNERABILITY: Insecure Random for Security Purpose
+app.get('/generate-token', (req, res) => {
+  // DO NOT USE IN PRODUCTION - Math.random() is not cryptographically secure
+  const token = Math.random().toString(36).substring(2);
+  res.json({ token });
+});
+
+// INTENTIONAL VULNERABILITY: Missing Rate Limiting (business logic)
+// This endpoint has no rate limiting - vulnerable to brute force
+app.post('/api-key-check', (req, res) => {
+  const { apiKey } = req.body;
+  const validKey = 'sk-12345-secret-api-key';
+  if (apiKey === validKey) {
+    res.json({ valid: true, access: 'granted' });
+  } else {
+    res.json({ valid: false });
   }
 });
 
