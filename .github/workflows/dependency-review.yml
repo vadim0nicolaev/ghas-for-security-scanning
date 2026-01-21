@@ -26,10 +26,9 @@ jobs:
         with:
           # Fail on vulnerabilities with severity >= high
           fail-on-severity: high
-          # Also check for license issues
-          deny-licenses: GPL-3.0, AGPL-3.0
-          # Allow specific licenses
-          allow-licenses: MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, ISC
+          # Deny copyleft licenses that require source disclosure
+          # Note: Can only use deny-licenses OR allow-licenses, not both
+          deny-licenses: GPL-3.0, AGPL-3.0, LGPL-3.0
           # Comment on PR with vulnerability summary
           comment-summary-in-pr: always
           # Warn about vulnerabilities but don't block (set to 'true' to block)
